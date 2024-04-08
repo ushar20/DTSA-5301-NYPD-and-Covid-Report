@@ -1,0 +1,246 @@
+---
+title: "NYPDShootingData"
+date: "2024-03-25"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This report shows a list of every shooting incident that occurred in the city of New York from 2006 to 2022. Each record represents a shooting incident in NYC and includes information about the event, the location, and the time of occurrence.
+ 
+ 
+### Libraries.
+
+```{r}
+library(lubridate)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+```
+
+
+### Importing Dataset and reading data from csv file
+First we need to import the required dataset from the following source: <https://catalog.data.gov/dataset>. After importing the dataset, proceed with the following steps:
+
+1.) Search for the dataset titled 'NYPD Shooting Incident Data.
+2.) Right-click on the CSV button next to the title and copy the link address into your respective RMD document.
+
+The following code completes this process and reads in the data in CSV format.
+
+```{r Importing Data}
+data <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+nypd_data <- read.csv(data)
+```
+
+
+### Tidy and Transform
+
+Let us explore the column names present in the data set, and we can start cleaning up the data so that we can transform and use those data in our further analysis.
+
+```{r var-names}
+colnames(nypd_data)
+```
+### Removing Unnecessary Columns
+
+From the above columns, we could remove some of the unnecessary columns that are not useful for our analysis.
+
+```{r remove_columns}
+
+nypd_data <- nypd_data %>% select(-c(
+                      JURISDICTION_CODE,
+                      Lon_Lat,
+                      X_COORD_CD,
+                      Y_COORD_CD,
+                      Longitude,
+                      Latitude
+                      ))
+
+```
+
+
+
+
+### Converting OCCUR_DATE to date data type and time to time object
+Now, we can convert the OCCUR_DATE, OCCUR_TIME  variable to a date so that the month, year, and day can be extracted for further analysis.
+
+
+```{r clean_data}
+nypd_data <- nypd_data %>% 
+            mutate(OCCUR_DATE = as.Date(OCCUR_DATE, "%m/%d/%Y"))
+nypd_data$OCCUR_TIME <- hms(nypd_data$OCCUR_TIME)
+nypd_data <- nypd_data %>% 
+            mutate(YEAR = format(nypd_data$OCCUR_DATE,"%Y"))
+```
+### Convert categorical data to factors
+
+We can further clean up the data  by converting categorical data into factors 
+
+```{r change_to_factors}
+nypd_data <- nypd_data %>%
+  mutate(BORO = as.factor(BORO)) %>%
+  mutate(VIC_AGE_GROUP = as.factor(VIC_AGE_GROUP)) %>%
+  mutate(VIC_SEX = as.factor(VIC_SEX)) %>%
+  mutate(PERP_SEX = as.factor(PERP_SEX)) %>%
+  mutate(PERP_RACE = as.factor(PERP_RACE)) %>%
+  mutate(PERP_AGE_GROUP = as.factor(PERP_AGE_GROUP)) %>%
+  mutate(VIC_RACE = as.factor(VIC_RACE))
+
+  
+```
+
+### Handling the missing values by specifying 'Unknown' in PERP_AGE_GROUP,PERP_SEX, columns
+In this dataset, we could see some missing values and data noise. We can handle those NA values by representing them as "unknown" in the columns PERP_AGE_GROUP, PERP_SEX, and PERP_RACE.
+
+```{r}
+nypd_data$STATISTICAL_MURDER_FLAG <- as.logical(nypd_data$STATISTICAL_MURDER_FLAG)
+
+```
+
+
+```{r}
+nypd_data <- nypd_data %>%
+  mutate(PERP_AGE_GROUP = replace_na(PERP_AGE_GROUP, "Unknown"),
+         PERP_SEX = replace_na(PERP_SEX, "Unknown"),
+         PERP_RACE = replace_na(PERP_RACE, "Unknown"))
+```  
+
+
+Now let us summarize the dataset that we have cleaned and transformed.
+```{r}
+#summary of data
+summary(nypd_data)
+```
+From the above output, it is evident that there are no null values present in the dataset, which means the dataset is cleaned and ready to use.
+
+
+
+### Visualizaton and Analysis 
+
+Data visualization is the graphical representation of information and data.
+First, I would like to visualize the total number of incidents occurred in each year from (2006-2022)
+
+```{r num_Incidents_Per_Year}
+year_of_incidents <- nypd_data %>% count(YEAR)
+ggplot(data=year_of_incidents, aes(x=YEAR, y=n)) +
+       geom_bar(stat="identity", fill="blue") +
+       labs(title = str_c("Number of Incidents Per Year"), 
+            y = str_c("Number of Incidents"),
+            x = str_c("YEAR"))
+```
+From this bar chart, we could see the number of incidents that occurred in each year from 2006 to 2022. We could see a decrease in the incident rate from 2017 to 2019.
+
+### Distribution of Incidents Across Boroughs
+
+The below graph shows the distribution of incidents in each borough in New York.
+
+```{r}
+nypd_data %>%
+  count(BORO) %>%
+  ggplot(aes(x = reorder(BORO, n), y = n, fill = BORO)) +
+  geom_bar(stat = "identity") +
+  scale_colour_viridis_b() +
+  labs(title = "Number of Shooting Incidents across Borough", 
+       x = "Borough", 
+       y = "Number of Incidents in each Borough") +
+  coord_polar()
+```
+In this graph, we could see that the "Brooklyn" borough in NY has the highest number of incidents reported when compared to other boroughs. Also, "Staten Island" borough has reported the least number of incidents.
+
+### Age Group Distribution of Victims by Borough
+
+Here we can visualize the age group distribution of victims by Borough. The below horizontal bar chart represents this visually.
+
+
+```{r}
+ggplot(nypd_data, aes(x = factor(BORO), fill = VIC_AGE_GROUP)) +
+  geom_bar(position = "dodge2") +
+  labs(title = "Age Group Distribution of Victims by Borough",
+       x = "Victim's Age Group",
+       y = "Number of Incidents in each Borough") +
+  coord_trans()
+
+```
+From the above graph, we could see that the age group of "25-44" has the highest number of victims in each borough. Also, the age group above 65+ has a smaller number of victims.
+
+### Distribution of Number of Shooting Incidents by Victim Race
+
+Let us now visualize the distribution of number of shooting incidents by Victim's race.
+
+```{r}
+nypd_data %>%
+  ggplot(aes(x = factor(BORO), fill = VIC_RACE)) +
+  geom_bar(position = "stack") +
+  labs(x = "Borough",
+       y = "Number of Shootings",
+       fill = "Victim Race",
+       title = "Number of Shootings by Victim Race")
+```     
+From this visualization, we could predict that most of the victims are BLACK, which has a higher number in each borough. Also, we could see that WHITE HISPANIC's are less significant victims in each borough.
+
+### ANALYSING AND MODELING
+
+Let us now analyze the data deeper to examine the rate at which the incidents increased or decreased over the past year for the age group that had the highest number of victims. Also, we can check if there is a huge difference between the months. By this, we can get which month has the highest incidents reported and which month has the least reported.
+
+
+```{r datatrend2022}
+
+ny_incidents <- nypd_data %>%
+filter(year(OCCUR_DATE)==2022 & PERP_AGE_GROUP=="25-44")  
+
+ny_incidents <- ny_incidents %>%
+mutate(OCCUR_Month = month(OCCUR_DATE))  
+
+ny_incidents <- ny_incidents %>%
+group_by(OCCUR_Month)%>%
+summarise(incidentdata = n(), deaths = sum(STATISTICAL_MURDER_FLAG)) 
+
+ny_incidents <- ny_incidents %>%
+mutate(Month_of_incidents = month(OCCUR_Month,label = TRUE, abbr = TRUE))
+
+ny_incidents  
+
+ny_incidents %>% ggplot(aes(x=Month_of_incidents, y=incidentdata, group = 1))+geom_line(color="red")
+```
+
+
+From the above graph, we could see  there was an increase in crime rates in the months of May and July. 
+
+
+Linear regression is a fundamental statistical technique used for modeling the relationship between a dependent variable (response) and one or more independent variables (predictors). 
+Likewise, we can show the **rate of incidents with respect to death rate**  
+
+
+```{r LinearRegression}
+mod <- lm(deaths ~ incidentdata, data = ny_incidents)  
+
+summary(mod)  
+
+inc_pred <- ny_incidents %>%
+mutate(pred = predict(mod))  
+
+inc_pred %>% ggplot() + geom_point(aes(x=incidentdata, y=deaths),color="yellow") + geom_point(aes(x=incidentdata, y=pred),color = "blue")  
+```
+
+
+In the above linear model, we can see that as the incident rate increases, the death rate also increases.
+
+### Bias Identification and Conclusion
+
+We discovered the number of shooting incidents in each borough in New York City. We discussed the trend of shooting incidents over the past 16 years.
+The data shown here is likely only data documented by police reports. It is possible that shootings occur that go unreported. The potential sources of bias for datasets like this are numerous and often significant. In analyzing the NYPD shooting incident data, it is crucial to acknowledge the presence of missing values, as they inherently introduce uncertainty and potential bias in our analysis and subsequent models. The given data model and related plot are based on specific aspects of the NYPD data. There are certain limitations that prevent us from drawing useful conclusions from this analysis. 
+A source of bias is that there could potentially be unreported shooting incidents that the police department has no information on.
+Possible sources of bias could be missing data and data noise.There is a significant challenge when it comes to analyzing or modeling perpetrator-related attributes due to the substantial amount of missing data.
+
+
+### Personal bias
+
+These data contain age, sex, and race data in the PERP_AGE_GROUP, PERP_SEX, PERP_RACE, VIC_AGE_GROUP, VIC_SEX, and VIC_RACE columns. Some records were based on incomplete reports where this information was listed as "unknown.". While the values of these columns weren't factored into the analysis, records based on incomplete reports were removed.
+
+Also, these data contain a raw number of reported cases and do not consider population density, so violence per capita data could yield different results.
+
